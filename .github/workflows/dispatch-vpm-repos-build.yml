@@ -1,0 +1,23 @@
+﻿name: Dispatch vpm-repos build
+
+on:
+  workflow_dispatch:
+  release:
+      types: [published, created, edited, unpublished, deleted, released]
+
+permissions:
+  id-token: write
+
+jobs:
+  dispatch-workflow:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request repository dispatch
+        run: |
+          curl -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.ACTIONS_KEY }}"\
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/DerpyNewbie/vpm-repos/actions/workflows/build-listing.yml/dispatches \
+            -d '{"ref":"main"}'
