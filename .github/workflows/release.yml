@@ -12,7 +12,7 @@ on:
       - '\d+.\d+.\d+-rc.\d+'
 
 env:
-  packageName: "dev.derpynewbie.common"
+  packageName: "dev.derpynewbie.voice-comms"
 
 permissions:
   contents: write
