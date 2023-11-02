@@ -2,7 +2,6 @@
 using JetBrains.Annotations;
 using UdonSharp;
 using UnityEngine;
-using UnityEngine.Serialization;
 using VRC.SDK3.Data;
 using VRC.SDKBase;
 using VRC.Udon.Common;
@@ -151,6 +150,81 @@ namespace DerpyNewbie.VoiceComms
             _rxChannelId.Clear();
         }
 
+        /// <summary>
+        /// Gets TX Channels which is filtered by <see cref="RxChannelId"/>
+        /// </summary>
+        /// <param name="playerId">playerId of VRCPlayerApi to get filtered TX channels</param>
+        /// <returns>List of TX channels <paramref name="playerId"/> is using to transmit. can be empty</returns>
+        /// <remarks>
+        /// Empty list means <paramref name="playerId"/> is not transmitting, or <paramref name="playerId"/>
+        /// is transmitting but <see cref="RxChannelId"/> didn't match
+        /// </remarks>
+        [PublicAPI]
+        public DataList _GetActiveTxChannels(int playerId)
+        {
+            var txChannels = _GetTxChannels(playerId);
+            var result = new DataList();
+            var rxChArr = _rxChannelId.ToArray();
+            var txChArr = txChannels.ToArray();
+            foreach (var rxChannel in rxChArr)
+            foreach (var txChannel in txChArr)
+                if (_IsSameChannelId(rxChannel, txChannel))
+                    result.Add(txChannel);
+            return result;
+        }
+
+        /// <summary>
+        /// Gets TX Channels used by <paramref name="playerId"/>
+        /// </summary>
+        /// <param name="playerId">playerId of VRCPlayerApi to get TX channels</param>
+        /// <returns>List of TX channels player with <paramref name="playerId"/> is using to transmit. can be empty</returns>
+        /// <remarks>
+        /// Empty list means player is not transmitting
+        /// </remarks>
+        [PublicAPI] [NotNull]
+        public DataList _GetTxChannels(int playerId)
+        {
+            var data = _GetVCUserData(_vcUserDataJson);
+            return _GetVCUserRecord(data, playerId, out var isTransmitting, out var txChannels)
+                ? txChannels
+                : new DataList();
+        }
+
+        /// <summary>
+        /// Gets <paramref name="playerId"/>'s transmitting state
+        /// </summary>
+        /// <param name="playerId">playerId of VRCPlayerApi to get transmitting state</param>
+        /// <returns>
+        /// <c>true</c> if <paramref name="playerId"/> is transmitting (not considering <see cref="RxChannelId"/>).
+        /// <c>false</c> otherwise
+        /// </returns>
+        /// <remarks>
+        /// This returns <c>true</c> even if <paramref name="playerId"/> does not have matching TX/RX channels.
+        /// </remarks>
+        /// <seealso cref="_IsActivelyTransmitting"/>
+        [PublicAPI]
+        public bool _IsTransmitting(int playerId)
+        {
+            var data = _GetVCUserData(_vcUserDataJson);
+            _GetVCUserRecord(data, playerId, out var isTransmitting, out var txChannels);
+            return isTransmitting;
+        }
+
+        /// <summary>
+        /// Gets <paramref name="playerId"/>'s transmitting state
+        /// </summary>
+        /// <param name="playerId">playerId of VRCPlayerApi to get transmitting state</param>
+        /// <returns>
+        /// <c>true</c> if <paramref name="playerId"/> is actively transmitting.
+        /// <c>false</c> otherwise
+        /// </returns>
+        /// <seealso cref="_IsTransmitting"/>
+        [PublicAPI]
+        public bool _IsActivelyTransmitting(int playerId)
+        {
+            return _activePlayerId.Contains($"{playerId}");
+        }
+
         #endregion
 
         #region NetworkEvents
@@ -171,13 +245,9 @@ namespace DerpyNewbie.VoiceComms
         public override void OnPostSerialization(SerializationResult result)
         {
             if (result.success)
-            {
                 _DiffApplyVCVoice();
-            }
             else
-            {
                 RequestSerialization();
-            }
         }
 
         public override void OnDeserialization()
@@ -338,16 +408,17 @@ namespace DerpyNewbie.VoiceComms
             var ch2Arr = ch2.ToArray();
             foreach (var ch1Token in ch1Arr)
             foreach (var ch2Token in ch2Arr)
-            {
-                var isNumbers = ch1Token.IsNumber && ch2Token.IsNumber;
-                if (ch1Token.TokenType != ch2Token.TokenType && !isNumbers) continue;
-
-                if (isNumbers && Math.Abs(ch1Token.Number - ch2Token.Number) < double.Epsilon) return true;
-
-                if (ch1Token.Equals(ch2Token)) return true;
-            }
+                if (_IsSameChannelId(ch1Token, ch2Token))
+                    return true;
 
             return false;
+        }
+
+        private static bool _IsSameChannelId(DataToken t1, DataToken t2)
+        {
+            var isNumbers = t1.IsNumber && t2.IsNumber;
+            if (isNumbers && Math.Abs(t1.Number - t2.Number) < double.Epsilon) return true;
+            return t1.TokenType != t2.TokenType ? t1.ToString().Equals(t2.ToString()) : t1.Equals(t2);
         }
 
         #endregion
