@@ -211,18 +211,18 @@ namespace DerpyNewbie.VoiceComms
         }
 
         /// <summary>
-        /// Gets <paramref name="player"/>'s transmitting state
+        /// Gets <paramref name="playerId"/>'s transmitting state
         /// </summary>
-        /// <param name="player">VRCPlayerApi to get transmitting state</param>
+        /// <param name="playerId">playerId of VRCPlayerApi to get transmitting state</param>
         /// <returns>
-        /// <c>true</c> if <paramref name="player"/> is actively transmitting.
+        /// <c>true</c> if <paramref name="playerId"/> is actively transmitting.
         /// <c>false</c> otherwise
         /// </returns>
         /// <seealso cref="_IsTransmitting"/>
         [PublicAPI]
-        public bool _IsActivelyTransmitting(VRCPlayerApi player)
+        public bool _IsActivelyTransmitting(int playerId)
         {
-            return _activePlayerId.Contains($"{player.playerId}");
+            return _activePlayerId.Contains($"{playerId}");
         }
 
         #endregion
