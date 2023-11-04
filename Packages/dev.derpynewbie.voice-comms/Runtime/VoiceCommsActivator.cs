@@ -54,6 +54,10 @@ namespace DerpyNewbie.VoiceComms
                 return;
             }
 
+            if (_local.GetPickupInHand(args.handType == HandType.LEFT
+                    ? VRC_Pickup.PickupHand.Left
+                    : VRC_Pickup.PickupHand.Right) != null) return;
+
             var eyeHeight = _local.GetAvatarEyeHeightAsMeters();
             var interactionPos =
                 _local.GetBonePosition(UseRightShoulder ? HumanBodyBones.RightShoulder : HumanBodyBones.LeftShoulder);
