@@ -1,4 +1,5 @@
-﻿using JetBrains.Annotations;
+﻿using System;
+using JetBrains.Annotations;
 using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
@@ -14,17 +15,27 @@ namespace DerpyNewbie.VoiceComms
         [SerializeField]
         private float interactionProximity = 0.1F;
         [SerializeField]
+        private bool adjustProximityWithEyeHeight = true;
+        [SerializeField]
         private KeyCode vcKey = KeyCode.B;
         [SerializeField]
         private bool toggleVc;
         [SerializeField]
-        private bool useRightShoulder;
+        private ActivatorInteractType interactType;
 
         [PublicAPI]
+        public ActivatorInteractType InteractType
+        {
+            get => interactType;
+            set => interactType = value;
+        }
+
+        [PublicAPI] [Obsolete]
         public bool UseRightShoulder
         {
-            get => useRightShoulder;
-            set => useRightShoulder = value;
+            get => interactType == ActivatorInteractType.RightShoulder;
+            set => interactType =
+                value ? ActivatorInteractType.RightShoulder : ActivatorInteractType.LeftShoulder;
         }
 
         [PublicAPI]
@@ -54,18 +65,7 @@ namespace DerpyNewbie.VoiceComms
                 return;
             }
 
-            if (_local.GetPickupInHand(args.handType == HandType.LEFT
-                    ? VRC_Pickup.PickupHand.Left
-                    : VRC_Pickup.PickupHand.Right) != null) return;
-
-            var eyeHeight = _local.GetAvatarEyeHeightAsMeters();
-            var interactionPos =
-                _local.GetBonePosition(UseRightShoulder ? HumanBodyBones.RightShoulder : HumanBodyBones.LeftShoulder);
-            var handPos = _local.GetTrackingData(args.handType == HandType.LEFT
-                ? VRCPlayerApi.TrackingDataType.LeftHand
-                : VRCPlayerApi.TrackingDataType.RightHand).position;
-
-            if (Vector3.Distance(interactionPos, handPos) >= interactionProximity * eyeHeight) return;
+            if (!CheckInteraction(InteractType, args.handType)) return;
 
             _isInteracting = true;
             _interactedHandType = args.handType;
@@ -105,5 +105,53 @@ namespace DerpyNewbie.VoiceComms
 
             if (!toggleVc) voiceComms._EndVCTransmission();
         }
+
+        private bool CheckInteraction(ActivatorInteractType intType, HandType handType)
+        {
+            if (_local.GetPickupInHand(handType == HandType.LEFT
+                    ? VRC_Pickup.PickupHand.Left
+                    : VRC_Pickup.PickupHand.Right) != null) return false;
+
+            if (intType == ActivatorInteractType.BothShoulder)
+                return CheckInteraction(ActivatorInteractType.LeftShoulder, handType) ||
+                       CheckInteraction(ActivatorInteractType.RightShoulder, handType);
+
+            var handPos = _local.GetTrackingData(handType == HandType.LEFT
+                ? VRCPlayerApi.TrackingDataType.LeftHand
+                : VRCPlayerApi.TrackingDataType.RightHand).position;
+            var eyeHeight = adjustProximityWithEyeHeight ? _local.GetAvatarEyeHeightAsMeters() : 1F;
+
+            Vector3 interactPos;
+            switch (intType)
+            {
+                // Both shoulder case is handled beforehand. unreachable
+                default:
+                case ActivatorInteractType.Custom:
+                {
+                    interactPos = transform.position;
+                    break;
+                }
+                case ActivatorInteractType.LeftShoulder:
+                {
+                    interactPos = _local.GetBonePosition(HumanBodyBones.LeftShoulder);
+                    break;
+                }
+                case ActivatorInteractType.RightShoulder:
+                {
+                    interactPos = _local.GetBonePosition(HumanBodyBones.RightShoulder);
+                    break;
+                }
+            }
+
+            return Vector3.Distance(interactPos, handPos) >= interactionProximity * eyeHeight;
+        }
+    }
+
+    public enum ActivatorInteractType
+    {
+        LeftShoulder,
+        RightShoulder,
+        BothShoulder,
+        Custom
     }
 }
