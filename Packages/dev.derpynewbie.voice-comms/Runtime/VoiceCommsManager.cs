@@ -227,19 +227,21 @@ namespace DerpyNewbie.VoiceComms
 
         #endregion
 
-        #region NetworkEvents
+        #region UdonEvents
+
+        public override void OnPlayerLeft(VRCPlayerApi playerApi)
+        {
+            var dict = _GetVCUserData(_vcUserDataJson);
+            _UpdateVCUserRecord(dict, playerApi.playerId, false, new DataList());
+            _UpdateJson(dict);
+            _DiffApplyVCVoice();
+        }
 
         public override void OnPreSerialization()
         {
             var dict = _GetVCUserData(_vcUserDataJson);
             _UpdateVCUserRecord(dict, Networking.LocalPlayer.playerId, IsTransmitting, _txChannelId);
-            if (!VRCJson.TrySerializeToJson(dict, JsonExportType.Minify, out var result))
-            {
-                Debug.LogError($"[VCManager] Unable to serialize to json {_vcUserDataJson}: {result.ToString()}");
-                return;
-            }
-
-            _vcUserDataJson = result.String;
+            _UpdateJson(dict);
         }
 
         public override void OnPostSerialization(SerializationResult result)
@@ -322,6 +324,17 @@ namespace DerpyNewbie.VoiceComms
             }
 
             _lastVcUserDataJson = _vcUserDataJson;
+        }
+
+        private void _UpdateJson(DataDictionary dict)
+        {
+            if (!VRCJson.TrySerializeToJson(dict, JsonExportType.Minify, out var result))
+            {
+                Debug.LogError($"[VCManager] Unable to serialize to json {_vcUserDataJson}: {result.ToString()}");
+                return;
+            }
+
+            _vcUserDataJson = result.String;
         }
 
         private void _SetVCVoice(VRCPlayerApi api)
