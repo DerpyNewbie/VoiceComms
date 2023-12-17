@@ -30,7 +30,7 @@ namespace DerpyNewbie.VoiceComms
             set => interactType = value;
         }
 
-        [PublicAPI] [Obsolete]
+        [PublicAPI] [Obsolete("Use InteractType instead")]
         public bool UseRightShoulder
         {
             get => interactType == ActivatorInteractType.RightShoulder;
