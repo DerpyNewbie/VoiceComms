@@ -49,6 +49,7 @@ namespace DerpyNewbie.VoiceComms
 
         private readonly DataList _txChannelId = new DataList { new DataToken(0) };
         private readonly DataList _rxChannelId = new DataList { new DataToken(0) };
+        private readonly DataList _activeInteractionType = new DataList();
 
         /// <summary>
         /// TX channel ID for local player. transmits voice over these channels.
@@ -81,6 +82,17 @@ namespace DerpyNewbie.VoiceComms
         public DataList ActivePlayerId => _activePlayerId.DeepClone();
 
         /// <summary>
+        /// Returns all current active interaction types supplied in <see cref="_BeginVCTransmission"/>.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="_BeginVCTransmission"/> is basically an Add operation.
+        /// and <see cref="_EndVCTransmission"/> is responsive for Remove op.
+        /// Returned list is deep cloned.
+        /// </remarks>
+        [PublicAPI]
+        public DataList ActiveInteractionType => _activeInteractionType.DeepClone();
+
+        /// <summary>
         /// Is local transmitting voice over channel?
         /// </summary>
         [PublicAPI]
@@ -90,28 +102,34 @@ namespace DerpyNewbie.VoiceComms
         /// Begins VC transmission in <see cref="TxChannelId"/> from local player.
         /// </summary>
         [PublicAPI]
-        public void _BeginVCTransmission()
+        public void _BeginVCTransmission(string interactionType = "Default")
         {
-            Debug.Log("[VCManager] _BeginVCTransmission");
+            Debug.Log($"[VCManager] _BeginVCTransmission: {interactionType}");
 
+            _activeInteractionType.Add(interactionType);
             IsTransmitting = true;
             if (!Networking.IsOwner(gameObject))
                 Networking.SetOwner(Networking.LocalPlayer, gameObject);
             RequestSerialization();
+
+            _Invoke_OnBeginTransmission(interactionType);
         }
 
         /// <summary>
         /// Ends VC transmission from local player.
         /// </summary>
         [PublicAPI]
-        public void _EndVCTransmission()
+        public void _EndVCTransmission(string interactionType = "Default")
         {
-            Debug.Log("[VCManager] _EndVCTransmission");
+            Debug.Log($"[VCManager] _EndVCTransmission: {interactionType}");
 
-            IsTransmitting = false;
+            _activeInteractionType.Remove(interactionType);
+            IsTransmitting = _activeInteractionType.Count != 0;
             if (!Networking.IsOwner(gameObject))
                 Networking.SetOwner(Networking.LocalPlayer, gameObject);
             RequestSerialization();
+
+            _Invoke_OnEndTransmission(interactionType);
         }
 
         [PublicAPI]
@@ -463,12 +481,44 @@ namespace DerpyNewbie.VoiceComms
             }
         }
 
+        private void _Invoke_OnBeginTransmission(string interactionType)
+        {
+            Debug.Log($"[VCManager] Invoke_OnBeginTransmission: {interactionType}");
+
+            var arr = _callbacks.ToArray();
+            foreach (var callback in arr)
+            {
+                var obj = (VoiceCommsManagerCallback)callback.Reference;
+                if (obj != null) obj.OnBeginTransmission(interactionType);
+            }
+        }
+
+        private void _Invoke_OnEndTransmission(string interactionType)
+        {
+            Debug.Log($"[VCManager] Invoke_OnEndTransmission: {interactionType}");
+
+            var arr = _callbacks.ToArray();
+            foreach (var callback in arr)
+            {
+                var obj = (VoiceCommsManagerCallback)callback.Reference;
+                if (obj != null) obj.OnEndTransmission(interactionType);
+            }
+        }
+
         #endregion
     }
 
     public abstract class VoiceCommsManagerCallback : UdonSharpBehaviour
     {
         public virtual void OnVoiceUpdated(VRCPlayerApi player, bool activated)
+        {
+        }
+
+        public virtual void OnBeginTransmission(string interactionType)
+        {
+        }
+
+        public virtual void OnEndTransmission(string interactionType)
         {
         }
     }
