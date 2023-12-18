@@ -143,7 +143,7 @@ namespace DerpyNewbie.VoiceComms
                 }
             }
 
-            return Vector3.Distance(interactPos, handPos) >= interactionProximity * eyeHeight;
+            return Vector3.Distance(interactPos, handPos) <= interactionProximity * eyeHeight;
         }
     }
 
