@@ -13,16 +13,22 @@ namespace DerpyNewbie.VoiceComms
     {
         [SerializeField]
         private VoiceCommsManager voiceComms;
+
         [SerializeField]
         private float interactionProximity = 0.1F;
+
         [SerializeField]
         private bool adjustProximityWithEyeHeight = true;
+
         [SerializeField]
         private KeyCode vcKey = KeyCode.B;
+
         [SerializeField]
         private bool toggleVc;
+
         [SerializeField]
         private ActivatorInteractType interactType;
+
         [SerializeField]
         private string customInteractionName = "Custom";
 
@@ -56,6 +62,12 @@ namespace DerpyNewbie.VoiceComms
             _local = Networking.LocalPlayer;
         }
 
+        private void Update()
+        {
+            if (Input.GetKeyDown(vcKey)) OnVcUseDown(HandType.LEFT, "Desktop");
+            if (Input.GetKeyUp(vcKey)) OnVcUseUp(HandType.LEFT, "Desktop");
+        }
+
         public override void InputUse(bool value, UdonInputEventArgs args)
         {
             var handTypeKey = args.handType == HandType.LEFT ? "LEFT" : "RIGHT";
@@ -64,23 +76,18 @@ namespace DerpyNewbie.VoiceComms
                 if (value) return;
                 var lastInteractionType = _interactionData[handTypeKey].String;
                 _interactionData.Remove(handTypeKey);
-                _OnVcUseUp(args.handType, lastInteractionType);
+                OnVcUseUp(args.handType, lastInteractionType);
                 return;
             }
 
-            if (!CheckInteraction(InteractType, args.handType, out var interactionType)) return;
+            if (IsPickupInHand(args.handType)) return;
+            if (!CanInteract(InteractType, args.handType, out var interactionName)) return;
 
-            _interactionData.Add(handTypeKey, interactionType);
-            _OnVcUseDown(args.handType, interactionType);
+            _interactionData.Add(handTypeKey, interactionName);
+            OnVcUseDown(args.handType, interactionName);
         }
 
-        private void Update()
-        {
-            if (Input.GetKeyDown(vcKey)) _OnVcUseDown(HandType.LEFT, "Desktop");
-            if (Input.GetKeyUp(vcKey)) _OnVcUseUp(HandType.LEFT, "Desktop");
-        }
-
-        private void _OnVcUseDown(HandType handType, string interactionType)
+        private void OnVcUseDown(HandType handType, string interactionName)
         {
             _local.PlayHapticEventInHand(
                 handType == HandType.LEFT ? VRC_Pickup.PickupHand.Left : VRC_Pickup.PickupHand.Right,
@@ -89,16 +96,16 @@ namespace DerpyNewbie.VoiceComms
 
             if (toggleVc)
             {
-                if (voiceComms.IsTransmitting) voiceComms._EndVCTransmission(interactionType);
-                else voiceComms._BeginVCTransmission(interactionType);
+                if (voiceComms.IsTransmitting) voiceComms._EndVCTransmission(interactionName);
+                else voiceComms._BeginVCTransmission(interactionName);
             }
             else
             {
-                voiceComms._BeginVCTransmission(interactionType);
+                voiceComms._BeginVCTransmission(interactionName);
             }
         }
 
-        private void _OnVcUseUp(HandType handType, string interactionType)
+        private void OnVcUseUp(HandType handType, string interactionType)
         {
             _local.PlayHapticEventInHand(
                 handType == HandType.LEFT ? VRC_Pickup.PickupHand.Left : VRC_Pickup.PickupHand.Right,
@@ -108,55 +115,82 @@ namespace DerpyNewbie.VoiceComms
             if (!toggleVc) voiceComms._EndVCTransmission(interactionType);
         }
 
-        private bool CheckInteraction(ActivatorInteractType intType, HandType handType, out string interactionType)
+        private bool CanInteract(ActivatorInteractType activatorInteractType, HandType handType,
+            out string interactionName)
         {
-            if (_local.GetPickupInHand(handType == HandType.LEFT
-                    ? VRC_Pickup.PickupHand.Left
-                    : VRC_Pickup.PickupHand.Right) != null)
+            // Handle BothShoulder case
+            if (activatorInteractType == ActivatorInteractType.BothShoulder)
             {
-                interactionType = default;
-                return false;
+                return CanInteract(ActivatorInteractType.LeftShoulder, handType, out interactionName) ||
+                       CanInteract(ActivatorInteractType.RightShoulder, handType, out interactionName);
             }
 
-            if (intType == ActivatorInteractType.BothShoulder)
-            {
-                // if left shoulder check returns true, interactionType will be set to LeftShoulder.
-                // otherwise, it'll be overwritten by right shoulder check.
-                return CheckInteraction(ActivatorInteractType.LeftShoulder, handType, out interactionType) ||
-                       CheckInteraction(ActivatorInteractType.RightShoulder, handType, out interactionType);
-            }
-
+            // Get hand position
             var handPos = _local.GetTrackingData(handType == HandType.LEFT
                 ? VRCPlayerApi.TrackingDataType.LeftHand
                 : VRCPlayerApi.TrackingDataType.RightHand).position;
-            var eyeHeight = adjustProximityWithEyeHeight ? _local.GetAvatarEyeHeightAsMeters() : 1F;
 
-            Vector3 interactPos;
-            switch (intType)
+            // Get interaction pos and name
+            var interactPos = GetInteractionPosition(activatorInteractType);
+            interactionName = GetInteractionType(activatorInteractType);
+
+            // Calculate proximity
+            var proximity = interactionProximity;
+            if (adjustProximityWithEyeHeight)
             {
-                // Both shoulder case is handled beforehand. unreachable
-                default:
-                case ActivatorInteractType.Custom:
-                {
-                    interactPos = transform.position;
-                    interactionType = customInteractionName;
-                    break;
-                }
-                case ActivatorInteractType.LeftShoulder:
-                {
-                    interactPos = _local.GetBonePosition(HumanBodyBones.LeftShoulder);
-                    interactionType = "LeftShoulder";
-                    break;
-                }
-                case ActivatorInteractType.RightShoulder:
-                {
-                    interactPos = _local.GetBonePosition(HumanBodyBones.RightShoulder);
-                    interactionType = "RightShoulder";
-                    break;
-                }
+                proximity *= _local.GetAvatarEyeHeightAsMeters();
             }
 
-            return Vector3.Distance(interactPos, handPos) <= interactionProximity * eyeHeight;
+            return Vector3.Distance(interactPos, handPos) <= proximity;
+        }
+
+        private Vector3 GetInteractionPosition(ActivatorInteractType interactionType)
+        {
+            // Not supported in UdonSharp
+            // ReSharper disable once ConvertSwitchStatementToSwitchExpression
+            switch (interactionType)
+            {
+                case ActivatorInteractType.RightShoulder:
+                    return _local.GetBonePosition(HumanBodyBones.RightShoulder);
+                case ActivatorInteractType.LeftShoulder:
+                    return _local.GetBonePosition(HumanBodyBones.LeftShoulder);
+                case ActivatorInteractType.Custom:
+                case ActivatorInteractType.BothShoulder:
+                default:
+                    return transform.position;
+            }
+        }
+
+        private string GetInteractionType(ActivatorInteractType activatorInteractType)
+        {
+            // Not supported in UdonSharp
+            // ReSharper disable once ConvertSwitchStatementToSwitchExpression
+            switch (activatorInteractType)
+            {
+                case ActivatorInteractType.RightShoulder:
+                    return "RightShoulder";
+                case ActivatorInteractType.LeftShoulder:
+                    return "LeftShoulder";
+                case ActivatorInteractType.Custom:
+                case ActivatorInteractType.BothShoulder:
+                default:
+                    return customInteractionName;
+            }
+        }
+
+        private bool IsPickupInHand(HandType handType)
+        {
+            // Not supported in UdonSharp
+            // ReSharper disable once ConvertSwitchStatementToSwitchExpression
+            switch (handType)
+            {
+                case HandType.LEFT:
+                    return _local.GetPickupInHand(VRC_Pickup.PickupHand.Left);
+                case HandType.RIGHT:
+                    return _local.GetPickupInHand(VRC_Pickup.PickupHand.Right);
+                default:
+                    return false;
+            }
         }
     }
 
