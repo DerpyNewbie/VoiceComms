@@ -89,6 +89,12 @@ namespace DerpyNewbie.VoiceComms
 
         private void OnVcUseDown(HandType handType, string interactionName)
         {
+            if (!voiceComms)
+            {
+                Debug.LogError($"[VoiceCommsActivator-{name}] VoiceCommsManager is not assigned");
+                return;
+            }
+
             _local.PlayHapticEventInHand(
                 handType == HandType.LEFT ? VRC_Pickup.PickupHand.Left : VRC_Pickup.PickupHand.Right,
                 .1F, 0.2F, 0.2F
@@ -107,6 +113,12 @@ namespace DerpyNewbie.VoiceComms
 
         private void OnVcUseUp(HandType handType, string interactionType)
         {
+            if (!voiceComms)
+            {
+                Debug.LogError($"[VoiceCommsActivator-{name}] VoiceCommsManager is not assigned");
+                return;
+            }
+
             _local.PlayHapticEventInHand(
                 handType == HandType.LEFT ? VRC_Pickup.PickupHand.Left : VRC_Pickup.PickupHand.Right,
                 .1F, 0.2F, 0.2F
