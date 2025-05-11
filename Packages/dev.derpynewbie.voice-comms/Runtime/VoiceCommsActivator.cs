@@ -11,6 +11,16 @@ namespace DerpyNewbie.VoiceComms
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
     public class VoiceCommsActivator : UdonSharpBehaviour
     {
+        private const string InteractionNameLeftShoulderValue = "LeftShoulder";
+        private const string InteractionNameRightShoulderValue = "RightShoulder";
+        private const string InteractionNameUnknownValue = "Unknown";
+        private const string HandTypeRightValue = "RIGHT";
+        private const string HandTypeLeftValue = "LEFT";
+        private const string HandTypeUnknownValue = "UNKNOWN";
+        private const string InteractionNameKey = "interactionName";
+        private const string StartTimeKey = "startTime";
+        private const string EndTimeKey = "endTime";
+
         [SerializeField]
         private VoiceCommsManager voiceComms;
 
@@ -60,7 +70,6 @@ namespace DerpyNewbie.VoiceComms
 
         private VRCPlayerApi _local;
         private readonly DataDictionary _interactionData = new DataDictionary();
-        private float _startTime = float.MinValue;
 
         private void Start()
         {
@@ -72,11 +81,16 @@ namespace DerpyNewbie.VoiceComms
             if (Input.GetKeyDown(vcKey)) OnVcUseDown(HandType.LEFT, "Desktop");
             if (Input.GetKeyUp(vcKey)) OnVcUseUp(HandType.LEFT);
 
-            if (HasDurationLimit() && IsInteracting() && _startTime + maxDuration < Time.timeSinceLevelLoad)
+            if (IsInteracting())
             {
                 var keys = _interactionData.GetKeys().ToArray();
                 foreach (var key in keys)
                 {
+                    var entry = _interactionData[key].DataDictionary;
+                    if (!entry.TryGetValue(EndTimeKey, TokenType.Float, out var endTimeToken) ||
+                        endTimeToken.Float >= Time.timeSinceLevelLoad)
+                        continue;
+
                     OnVcUseUp(TokenToHandType(key), true);
                 }
             }
@@ -119,8 +133,14 @@ namespace DerpyNewbie.VoiceComms
                 if (UseToggleVc) return;
             }
 
-            _startTime = Time.timeSinceLevelLoad;
-            _interactionData.Add(handTypeKey, interactionName);
+            // UdonSharp does not support collection initializer
+            // ReSharper disable once UseObjectOrCollectionInitializer
+            var entry = new DataDictionary();
+            entry.Add(InteractionNameKey, interactionName);
+            entry.Add(StartTimeKey, Time.timeSinceLevelLoad);
+            if (HasDurationLimit()) entry.Add(EndTimeKey, Time.timeSinceLevelLoad + maxDuration);
+            _interactionData.Add(handTypeKey, entry);
+
             voiceComms._BeginVCTransmission(interactionName);
         }
 
@@ -146,7 +166,8 @@ namespace DerpyNewbie.VoiceComms
 
             if (!toggleVc || forceEnd)
             {
-                voiceComms._EndVCTransmission(_interactionData[handTypeKey].String);
+                var entry = _interactionData[handTypeKey].DataDictionary;
+                voiceComms._EndVCTransmission(entry[InteractionNameKey].String);
                 _interactionData.Remove(handTypeKey);
             }
         }
@@ -205,14 +226,14 @@ namespace DerpyNewbie.VoiceComms
             switch (activatorInteractType)
             {
                 case ActivatorInteractType.RightShoulder:
-                    return "RightShoulder";
+                    return InteractionNameRightShoulderValue;
                 case ActivatorInteractType.LeftShoulder:
-                    return "LeftShoulder";
+                    return InteractionNameLeftShoulderValue;
                 case ActivatorInteractType.Custom:
                     return customInteractionName;
                 case ActivatorInteractType.BothShoulder:
                 default:
-                    return "Unknown"; // Should throw but not supported in UdonSharp
+                    return InteractionNameUnknownValue; // Should throw but not supported in UdonSharp
             }
         }
 
@@ -221,12 +242,12 @@ namespace DerpyNewbie.VoiceComms
             switch (handType)
             {
                 case HandType.LEFT:
-                    return new DataToken("LEFT");
+                    return HandTypeLeftValue;
                 case HandType.RIGHT:
-                    return new DataToken("RIGHT");
+                    return HandTypeRightValue;
                 default:
                     Debug.LogError($"[VoiceCommsActivator-{name}] Invalid hand type: {handType}");
-                    return new DataToken("UNKNOWN"); // Should throw but not supported in UdonSharp
+                    return HandTypeUnknownValue; // Should throw but not supported in UdonSharp
             }
         }
 
@@ -240,9 +261,9 @@ namespace DerpyNewbie.VoiceComms
 
             switch (token.String)
             {
-                case "LEFT":
+                case HandTypeLeftValue:
                     return HandType.LEFT;
-                case "RIGHT":
+                case HandTypeRightValue:
                     return HandType.RIGHT;
                 default:
                     Debug.LogError($"[VoiceCommsActivator-{name}] Invalid token value for HandType: {token.String}");
