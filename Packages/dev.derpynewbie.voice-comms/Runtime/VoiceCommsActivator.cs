@@ -15,6 +15,10 @@ namespace DerpyNewbie.VoiceComms
         private VoiceCommsManager voiceComms;
 
         [SerializeField]
+        [Tooltip("Maximum duration for continuous transmission. Set this 0 or below for unlimited duration.")]
+        private float maxDuration;
+
+        [SerializeField]
         private float interactionProximity = 0.1F;
 
         [SerializeField]
@@ -56,6 +60,7 @@ namespace DerpyNewbie.VoiceComms
 
         private VRCPlayerApi _local;
         private readonly DataDictionary _interactionData = new DataDictionary();
+        private float _startTime = float.MinValue;
 
         private void Start()
         {
@@ -65,25 +70,31 @@ namespace DerpyNewbie.VoiceComms
         private void Update()
         {
             if (Input.GetKeyDown(vcKey)) OnVcUseDown(HandType.LEFT, "Desktop");
-            if (Input.GetKeyUp(vcKey)) OnVcUseUp(HandType.LEFT, "Desktop");
+            if (Input.GetKeyUp(vcKey)) OnVcUseUp(HandType.LEFT);
+
+            if (HasDurationLimit() && IsInteracting() && _startTime + maxDuration < Time.timeSinceLevelLoad)
+            {
+                var keys = _interactionData.GetKeys().ToArray();
+                foreach (var key in keys)
+                {
+                    OnVcUseUp(TokenToHandType(key), true);
+                }
+            }
         }
 
         public override void InputUse(bool value, UdonInputEventArgs args)
         {
-            var handTypeKey = args.handType == HandType.LEFT ? "LEFT" : "RIGHT";
+            var handTypeKey = HandTypeToToken(args.handType);
             if (_interactionData.ContainsKey(handTypeKey))
             {
                 if (value) return;
-                var lastInteractionType = _interactionData[handTypeKey].String;
-                _interactionData.Remove(handTypeKey);
-                OnVcUseUp(args.handType, lastInteractionType);
+                OnVcUseUp(args.handType);
                 return;
             }
 
             if (IsPickupInHand(args.handType)) return;
             if (!CanInteract(InteractType, args.handType, out var interactionName)) return;
 
-            _interactionData.Add(handTypeKey, interactionName);
             OnVcUseDown(args.handType, interactionName);
         }
 
@@ -100,22 +111,31 @@ namespace DerpyNewbie.VoiceComms
                 .1F, 0.2F, 0.2F
             );
 
-            if (toggleVc)
+            // If already in use, end it.
+            var handTypeKey = HandTypeToToken(handType);
+            if (_interactionData.ContainsKey(handTypeKey))
             {
-                if (voiceComms.IsTransmitting) voiceComms._EndVCTransmission(interactionName);
-                else voiceComms._BeginVCTransmission(interactionName);
+                OnVcUseUp(handType, true);
+                if (UseToggleVc) return;
             }
-            else
-            {
-                voiceComms._BeginVCTransmission(interactionName);
-            }
+
+            _startTime = Time.timeSinceLevelLoad;
+            _interactionData.Add(handTypeKey, interactionName);
+            voiceComms._BeginVCTransmission(interactionName);
         }
 
-        private void OnVcUseUp(HandType handType, string interactionType)
+        private void OnVcUseUp(HandType handType, bool forceEnd = false)
         {
             if (!voiceComms)
             {
                 Debug.LogError($"[VoiceCommsActivator-{name}] VoiceCommsManager is not assigned");
+                return;
+            }
+
+            var handTypeKey = HandTypeToToken(handType);
+            if (!_interactionData.ContainsKey(handTypeKey))
+            {
+                Debug.LogWarning($"[VoiceCommsActivator-{name}] HandType {handType} is not in use");
                 return;
             }
 
@@ -124,7 +144,11 @@ namespace DerpyNewbie.VoiceComms
                 .1F, 0.2F, 0.2F
             );
 
-            if (!toggleVc) voiceComms._EndVCTransmission(interactionType);
+            if (!toggleVc || forceEnd)
+            {
+                voiceComms._EndVCTransmission(_interactionData[handTypeKey].String);
+                _interactionData.Remove(handTypeKey);
+            }
         }
 
         private bool CanInteract(ActivatorInteractType activatorInteractType, HandType handType,
@@ -192,6 +216,40 @@ namespace DerpyNewbie.VoiceComms
             }
         }
 
+        private DataToken HandTypeToToken(HandType handType)
+        {
+            switch (handType)
+            {
+                case HandType.LEFT:
+                    return new DataToken("LEFT");
+                case HandType.RIGHT:
+                    return new DataToken("RIGHT");
+                default:
+                    Debug.LogError($"[VoiceCommsActivator-{name}] Invalid hand type: {handType}");
+                    return new DataToken("UNKNOWN"); // Should throw but not supported in UdonSharp
+            }
+        }
+
+        private HandType TokenToHandType(DataToken token)
+        {
+            if (token.TokenType != TokenType.String)
+            {
+                Debug.LogError($"[VoiceCommsActivator-{name}] Invalid token type for HandType: {token.TokenType}");
+                return HandType.LEFT; // Should throw but not supported in UdonSharp
+            }
+
+            switch (token.String)
+            {
+                case "LEFT":
+                    return HandType.LEFT;
+                case "RIGHT":
+                    return HandType.RIGHT;
+                default:
+                    Debug.LogError($"[VoiceCommsActivator-{name}] Invalid token value for HandType: {token.String}");
+                    return HandType.LEFT; // Should throw but not supported in UdonSharp
+            }
+        }
+
         private bool IsPickupInHand(HandType handType)
         {
             // Not supported in UdonSharp
@@ -205,6 +263,16 @@ namespace DerpyNewbie.VoiceComms
                 default:
                     return false; // Should throw but not supported in UdonSharp
             }
+        }
+
+        private bool IsInteracting()
+        {
+            return _interactionData.Count != 0;
+        }
+
+        private bool HasDurationLimit()
+        {
+            return maxDuration > 0;
         }
     }
 
