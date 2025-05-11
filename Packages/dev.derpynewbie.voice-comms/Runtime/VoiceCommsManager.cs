@@ -15,6 +15,7 @@ namespace DerpyNewbie.VoiceComms
 
         [UdonSynced]
         private string _vcUserDataJson = "{}";
+
         private string _lastVcUserDataJson = "{}";
 
         #endregion
@@ -23,23 +24,31 @@ namespace DerpyNewbie.VoiceComms
 
         [SerializeField]
         private float vcGain;
+
         [SerializeField]
         private float vcNear = 999999;
+
         [SerializeField]
         private float vcFar = 999999;
+
         [SerializeField]
         private float vcVolumetricRadius;
+
         [SerializeField]
         private bool vcLowpass;
 
         [SerializeField]
         private float defaultGain = 15;
+
         [SerializeField]
         private float defaultNear;
+
         [SerializeField]
         private float defaultFar = 25;
+
         [SerializeField]
         private float defaultVolumetricRadius;
+
         [SerializeField]
         private bool defaultLowpass = true;
 
@@ -87,13 +96,13 @@ namespace DerpyNewbie.VoiceComms
         /// <remarks>
         /// <see cref="_BeginVCTransmission"/> is basically an Add operation.
         /// and <see cref="_EndVCTransmission"/> is responsive for Remove op.
-        /// Returned list is deep cloned.
+        /// The returned list is deeply cloned.
         /// </remarks>
         [PublicAPI]
         public DataList ActiveInteractionType => _activeInteractionType.DeepClone();
 
         /// <summary>
-        /// Is local transmitting voice over channel?
+        /// Is local transmitting voice over a channel?
         /// </summary>
         [PublicAPI]
         public bool IsTransmitting { get; private set; }
