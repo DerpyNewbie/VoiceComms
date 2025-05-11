@@ -155,9 +155,10 @@ namespace DerpyNewbie.VoiceComms
                 case ActivatorInteractType.LeftShoulder:
                     return _local.GetBonePosition(HumanBodyBones.LeftShoulder);
                 case ActivatorInteractType.Custom:
-                case ActivatorInteractType.BothShoulder:
-                default:
                     return transform.position;
+                default:
+                case ActivatorInteractType.BothShoulder:
+                    return Vector3.zero; // Should throw but not supported in UdonSharp
             }
         }
 
@@ -172,9 +173,10 @@ namespace DerpyNewbie.VoiceComms
                 case ActivatorInteractType.LeftShoulder:
                     return "LeftShoulder";
                 case ActivatorInteractType.Custom:
+                    return customInteractionName;
                 case ActivatorInteractType.BothShoulder:
                 default:
-                    return customInteractionName;
+                    return "Unknown"; // Should throw but not supported in UdonSharp
             }
         }
 
@@ -189,7 +191,7 @@ namespace DerpyNewbie.VoiceComms
                 case HandType.RIGHT:
                     return _local.GetPickupInHand(VRC_Pickup.PickupHand.Right);
                 default:
-                    return false;
+                    return false; // Should throw but not supported in UdonSharp
             }
         }
     }
