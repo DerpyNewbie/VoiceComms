@@ -5,6 +5,7 @@ using UnityEngine;
 using VRC.SDK3.Data;
 using VRC.SDKBase;
 using VRC.Udon.Common;
+using VRC.Udon.Common.Interfaces;
 
 namespace DerpyNewbie.VoiceComms
 {
@@ -85,7 +86,7 @@ namespace DerpyNewbie.VoiceComms
         public DataList RxChannelId => _rxChannelId.DeepClone();
 
         /// <summary>
-        /// Players who has their VC activated currently will be in this list.
+        /// Players who have their VC activated currently will be in this list.
         /// </summary>
         [PublicAPI]
         public DataList ActivePlayerId => _activePlayerId.DeepClone();
@@ -250,6 +251,38 @@ namespace DerpyNewbie.VoiceComms
         public bool _IsActivelyTransmitting(int playerId)
         {
             return _activePlayerId.Contains($"{playerId}");
+        }
+
+        /// <summary>
+        /// Forcefully clears all active TXs 
+        /// </summary>
+        /// <remarks>
+        /// Syncs data if local is master
+        /// </remarks>
+        [PublicAPI]
+        public void ClearAllTransmissions()
+        {
+            _vcUserDataJson = "{}";
+            _activeInteractionType.Clear();
+            IsTransmitting = false;
+            _DiffApplyVCVoice();
+
+            if (!Networking.IsMaster) return;
+
+            Networking.SetOwner(Networking.LocalPlayer, gameObject);
+            RequestSerialization();
+        }
+
+        /// <summary>
+        /// Forcefully clears all active TXs for all clients
+        /// </summary>
+        /// <remarks>
+        /// Sends network event <see cref="ClearAllTransmissions"/> for all targets 
+        /// </remarks>
+        [PublicAPI]
+        public void _ClearAllTransmissionsGlobally()
+        {
+            SendCustomNetworkEvent(NetworkEventTarget.All, nameof(ClearAllTransmissions));
         }
 
         #endregion
