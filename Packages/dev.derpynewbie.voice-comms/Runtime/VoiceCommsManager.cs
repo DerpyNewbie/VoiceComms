@@ -15,6 +15,7 @@ namespace DerpyNewbie.VoiceComms
 
         [UdonSynced]
         private string _vcUserDataJson = "{}";
+
         private string _lastVcUserDataJson = "{}";
 
         #endregion
@@ -23,23 +24,31 @@ namespace DerpyNewbie.VoiceComms
 
         [SerializeField]
         private float vcGain;
+
         [SerializeField]
         private float vcNear = 999999;
+
         [SerializeField]
         private float vcFar = 999999;
+
         [SerializeField]
         private float vcVolumetricRadius;
+
         [SerializeField]
         private bool vcLowpass;
 
         [SerializeField]
         private float defaultGain = 15;
+
         [SerializeField]
         private float defaultNear;
+
         [SerializeField]
         private float defaultFar = 25;
+
         [SerializeField]
         private float defaultVolumetricRadius;
+
         [SerializeField]
         private bool defaultLowpass = true;
 
@@ -55,7 +64,7 @@ namespace DerpyNewbie.VoiceComms
         /// TX channel ID for local player. transmits voice over these channels.
         /// </summary>
         /// <remarks>
-        /// Returned list is deep cloned. Use methods such as <see cref="_AddTxChannel"/> or <see cref="_RemoveTxChannel"/> to interact with it instead.
+        /// The returned list is deeply cloned. Use methods such as <see cref="_AddTxChannel"/> or <see cref="_RemoveTxChannel"/> to interact with it instead.
         /// It's initialized with { 0 }.
         /// </remarks>
         /// <seealso cref="VoiceCommsManager._AddTxChannel"/>
@@ -64,10 +73,10 @@ namespace DerpyNewbie.VoiceComms
         public DataList TxChannelId => _txChannelId.DeepClone();
 
         /// <summary>
-        /// RX Channel ID for local player. other player's VC transmission can be heard if one of channel id matches.
+        /// RX Channel ID for local player. another player's VC transmission can be heard if one of channel id matches.
         /// </summary>
         /// <remarks>
-        /// Returned list is deep cloned. Use methods such as <see cref="_AddRxChannel"/> or <see cref="_RemoveRxChannel"/> to interact with it instead.
+        /// The returned list is deeply cloned. Use methods such as <see cref="_AddRxChannel"/> or <see cref="_RemoveRxChannel"/> to interact with it instead.
         /// It's initialized with { 0 }.
         /// </remarks>
         /// <seealso cref="VoiceCommsManager._AddRxChannel"/>
@@ -87,13 +96,13 @@ namespace DerpyNewbie.VoiceComms
         /// <remarks>
         /// <see cref="_BeginVCTransmission"/> is basically an Add operation.
         /// and <see cref="_EndVCTransmission"/> is responsive for Remove op.
-        /// Returned list is deep cloned.
+        /// The returned list is deeply cloned.
         /// </remarks>
         [PublicAPI]
         public DataList ActiveInteractionType => _activeInteractionType.DeepClone();
 
         /// <summary>
-        /// Is local transmitting voice over channel?
+        /// Is local transmitting voice over a channel?
         /// </summary>
         [PublicAPI]
         public bool IsTransmitting { get; private set; }
@@ -172,7 +181,7 @@ namespace DerpyNewbie.VoiceComms
         /// Gets TX Channels which is filtered by <see cref="RxChannelId"/>
         /// </summary>
         /// <param name="playerId">playerId of VRCPlayerApi to get filtered TX channels</param>
-        /// <returns>List of TX channels <paramref name="playerId"/> is using to transmit. can be empty</returns>
+        /// <returns>List of TX channels <paramref name="playerId"/> is using to transmit. Can be empty</returns>
         /// <remarks>
         /// Empty list means <paramref name="playerId"/> is not transmitting, or <paramref name="playerId"/>
         /// is transmitting but <see cref="RxChannelId"/> didn't match
@@ -195,9 +204,9 @@ namespace DerpyNewbie.VoiceComms
         /// Gets TX Channels used by <paramref name="playerId"/>
         /// </summary>
         /// <param name="playerId">playerId of VRCPlayerApi to get TX channels</param>
-        /// <returns>List of TX channels player with <paramref name="playerId"/> is using to transmit. can be empty</returns>
+        /// <returns>List of TX channels player with <paramref name="playerId"/> is using to transmit. Can be empty</returns>
         /// <remarks>
-        /// Empty list means player is not transmitting
+        /// Empty list means the player is not transmitting
         /// </remarks>
         [PublicAPI] [NotNull]
         public DataList _GetTxChannels(int playerId)
