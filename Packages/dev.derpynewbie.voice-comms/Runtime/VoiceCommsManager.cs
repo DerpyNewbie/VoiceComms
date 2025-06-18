@@ -74,7 +74,7 @@ namespace DerpyNewbie.VoiceComms
         public DataList TxChannelId => _txChannelId.DeepClone();
 
         /// <summary>
-        /// RX Channel ID for local player. another player's VC transmission can be heard if one of channel id matches.
+        /// RX Channel ID for local player. another player's VC transmission can be heard if one of the channels id matches.
         /// </summary>
         /// <remarks>
         /// The returned list is deeply cloned. Use methods such as <see cref="_AddRxChannel"/> or <see cref="_RemoveRxChannel"/> to interact with it instead.
@@ -213,9 +213,13 @@ namespace DerpyNewbie.VoiceComms
         public DataList _GetTxChannels(int playerId)
         {
             var data = _GetVCUserData(_vcUserDataJson);
-            return _GetVCUserRecord(data, playerId, out var isTransmitting, out var txChannels)
-                ? txChannels
-                : new DataList();
+            // Cannot be _ in UdonSharp
+            // ReSharper disable once UnusedVariable
+            _GetVCUserRecord(data, playerId, out var isTransmitting, out var txChannels);
+
+            // Not available in UdonSharp
+            // ReSharper disable once MergeConditionalExpression
+            return txChannels != null ? txChannels : new DataList();
         }
 
         /// <summary>
@@ -234,6 +238,8 @@ namespace DerpyNewbie.VoiceComms
         public bool _IsTransmitting(int playerId)
         {
             var data = _GetVCUserData(_vcUserDataJson);
+            // Cannot be _ in UdonSharp
+            // ReSharper disable once UnusedVariable
             _GetVCUserRecord(data, playerId, out var isTransmitting, out var txChannels);
             return isTransmitting;
         }
@@ -315,7 +321,9 @@ namespace DerpyNewbie.VoiceComms
         public override void OnDeserialization()
         {
             var dict = _GetVCUserData(_vcUserDataJson);
-            _GetVCUserRecord(dict, Networking.LocalPlayer.playerId, out var isTransmitting, out var txChannelId);
+            // Cannot be _ in UdonSharp
+            // ReSharper disable once UnusedVariable
+            _GetVCUserRecord(dict, Networking.LocalPlayer.playerId, out var isTransmitting, out var txChannels);
             if (IsTransmitting != isTransmitting)
             {
                 Debug.LogWarning("[VCManager] Detected VC data de-sync! re-syncing!");
@@ -399,11 +407,13 @@ namespace DerpyNewbie.VoiceComms
 
         private void _SetVCVoice(VRCPlayerApi api)
         {
+            api.SetPlayerTag("VoiceCommsEnabled", "true");
             _SetVoice(api, vcGain, vcNear, vcFar, vcVolumetricRadius, vcLowpass);
         }
 
         private void _SetDefaultVoice(VRCPlayerApi api)
         {
+            api.SetPlayerTag("VoiceCommsEnabled", "false");
             _SetVoice(api, defaultGain, defaultNear, defaultFar, defaultVolumetricRadius, defaultLowpass);
         }
 
@@ -449,30 +459,22 @@ namespace DerpyNewbie.VoiceComms
                 return;
             }
 
-            if (dict.ContainsKey(key)) dict.Remove(key);
+            dict.Remove(key);
         }
 
-        private static bool _GetVCUserRecord(DataDictionary dict, int playerId, out bool isTransmitting,
-            out DataList txChannelId)
+        private static void _GetVCUserRecord(DataDictionary dict, int playerId, out bool isTransmitting,
+            [CanBeNull] out DataList txChannelId)
         {
             var key = $"{playerId}";
-            if (!dict.ContainsKey(key))
+            if (!dict.ContainsKey(key) || !dict.TryGetValue(key, TokenType.DataList, out var value))
             {
-                isTransmitting = default;
-                txChannelId = default;
-                return false;
-            }
-
-            if (!dict.TryGetValue(key, TokenType.DataList, out var value))
-            {
-                isTransmitting = default;
-                txChannelId = default;
-                return false;
+                isTransmitting = false;
+                txChannelId = null;
+                return;
             }
 
             isTransmitting = true;
             txChannelId = value.DataList;
-            return true;
         }
 
         private static bool _ContainsSameChannelId(DataList ch1, DataList ch2)
@@ -500,11 +502,13 @@ namespace DerpyNewbie.VoiceComms
 
         private readonly DataList _callbacks = new DataList();
 
+        [PublicAPI]
         public void _SubscribeCallback(VoiceCommsManagerCallback callback)
         {
             _callbacks.Add(callback);
         }
 
+        [PublicAPI]
         public void _UnsubscribeCallback(VoiceCommsManagerCallback callback)
         {
             _callbacks.Remove(callback);
@@ -519,7 +523,7 @@ namespace DerpyNewbie.VoiceComms
             foreach (var callback in arr)
             {
                 var obj = (VoiceCommsManagerCallback)callback.Reference;
-                if (obj != null) obj.OnVoiceUpdated(player, activated);
+                if (obj) obj.OnVoiceUpdated(player, activated);
             }
         }
 
@@ -531,7 +535,7 @@ namespace DerpyNewbie.VoiceComms
             foreach (var callback in arr)
             {
                 var obj = (VoiceCommsManagerCallback)callback.Reference;
-                if (obj != null) obj.OnBeginTransmission(interactionType);
+                if (obj) obj.OnBeginTransmission(interactionType);
             }
         }
 
@@ -543,7 +547,7 @@ namespace DerpyNewbie.VoiceComms
             foreach (var callback in arr)
             {
                 var obj = (VoiceCommsManagerCallback)callback.Reference;
-                if (obj != null) obj.OnEndTransmission(interactionType);
+                if (obj) obj.OnEndTransmission(interactionType);
             }
         }
 
