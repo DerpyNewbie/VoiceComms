@@ -463,7 +463,7 @@ namespace DerpyNewbie.VoiceComms
                 {
                     var playerApi = VRCPlayerApi.GetPlayerById(id);
                     if (playerApi == null || !Utilities.IsValid(playerApi) ||
-                        _IsUserSuppressed(playerApi) || IsVoiceCommsEnabled) continue;
+                        _IsUserSuppressed(playerApi) || !IsVoiceCommsEnabled) continue;
 
                     _activePlayerId.Add(key);
                     _SetVCVoice(playerApi);
