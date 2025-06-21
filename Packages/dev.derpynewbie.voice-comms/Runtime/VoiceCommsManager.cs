@@ -60,6 +60,7 @@ namespace DerpyNewbie.VoiceComms
         private readonly DataList _txChannelId = new DataList { new DataToken(0) };
         private readonly DataList _rxChannelId = new DataList { new DataToken(0) };
         private readonly DataList _activeInteractionType = new DataList();
+        private readonly DataDictionary _userSettings = new DataDictionary();
 
         /// <summary>
         /// TX channel ID for local player. transmits voice over these channels.
@@ -107,6 +108,12 @@ namespace DerpyNewbie.VoiceComms
         /// </summary>
         [PublicAPI]
         public bool IsTransmitting { get; private set; }
+
+        /// <summary>
+        /// Is VoiceCommsManager enabled and working?
+        /// </summary>
+        [PublicAPI]
+        public bool IsVoiceCommsEnabled { get; set; }
 
         /// <summary>
         /// Begins VC transmission in <see cref="TxChannelId"/> from local player.
@@ -291,6 +298,96 @@ namespace DerpyNewbie.VoiceComms
             SendCustomNetworkEvent(NetworkEventTarget.All, nameof(ClearAllTransmissions));
         }
 
+        [PublicAPI]
+        public void _SetUserVcSettings(string displayName,
+            bool suppressed, float gain, float near, float far, float volumetricRadius, bool lowpass)
+        {
+            // Not supported in UdonSharp
+            // ReSharper disable once UseObjectOrCollectionInitializer
+            var vcSettings = new DataDictionary();
+            vcSettings.Add("suppressed", new DataToken(suppressed));
+            vcSettings.Add("gain", new DataToken(gain));
+            vcSettings.Add("near", new DataToken(near));
+            vcSettings.Add("far", new DataToken(far));
+            vcSettings.Add("volumetricRadius", new DataToken(volumetricRadius));
+            vcSettings.Add("lowpass", new DataToken(lowpass));
+
+            if (_userSettings.ContainsKey(displayName)) _userSettings[displayName] = vcSettings;
+            else _userSettings.Add(displayName, vcSettings);
+
+            _RefreshVC();
+
+            _Invoke_OnVoiceSettingsUpdated(displayName);
+        }
+
+        [PublicAPI]
+        public void _GetUserVcSettings(string displayName,
+            out bool suppressed, out float gain, out float near, out float far, out float volumetricRadius,
+            out bool lowpass)
+        {
+            if (!_userSettings.ContainsKey(displayName))
+            {
+                suppressed = false;
+                _GetDefaultVcSettings(out gain, out near, out far, out volumetricRadius, out lowpass);
+                return;
+            }
+
+            var userSetting = _userSettings[displayName].DataDictionary;
+            userSetting.TryGetValue("suppressed", out var suppressedToken);
+            userSetting.TryGetValue("gain", out var gainToken);
+            userSetting.TryGetValue("near", out var nearToken);
+            userSetting.TryGetValue("far", out var farToken);
+            userSetting.TryGetValue("volumetricRadius", out var volumetricRadiusToken);
+            userSetting.TryGetValue("lowpass", out var lowpassToken);
+
+            suppressed = suppressedToken.Boolean;
+            gain = (float)gainToken.Number;
+            near = (float)nearToken.Number;
+            far = (float)farToken.Number;
+            volumetricRadius = (float)volumetricRadiusToken.Number;
+            lowpass = lowpassToken.Boolean;
+        }
+
+        public void _ClearUserVcSettings(string displayName)
+        {
+            _userSettings.Remove(displayName);
+        }
+
+        public void _ClearUserVcSettings()
+        {
+            _userSettings.Clear();
+        }
+
+        [PublicAPI]
+        public void _SetDefaultVcSettings(float gain, float near, float far, float volumetricRadius, bool lowpass)
+        {
+            vcGain = gain;
+            vcNear = near;
+            vcFar = far;
+            vcVolumetricRadius = volumetricRadius;
+            vcLowpass = lowpass;
+        }
+
+        [PublicAPI]
+        public void _GetDefaultVcSettings(out float gain, out float near, out float far,
+            out float volumetricRadius, out bool lowpass)
+        {
+            gain = vcGain;
+            near = vcNear;
+            far = vcFar;
+            volumetricRadius = vcVolumetricRadius;
+            lowpass = vcLowpass;
+        }
+
+        public bool _IsUserSuppressed(VRCPlayerApi playerApi)
+        {
+            if (!Utilities.IsValid(playerApi)) return true;
+
+            _GetUserVcSettings(playerApi.displayName, out var suppressed,
+                out var a, out var b, out var c, out var d, out var e);
+            return suppressed;
+        }
+
         #endregion
 
         #region UdonEvents
@@ -365,7 +462,8 @@ namespace DerpyNewbie.VoiceComms
                     !_activePlayerId.Contains(key) && int.TryParse(key.String, out var id))
                 {
                     var playerApi = VRCPlayerApi.GetPlayerById(id);
-                    if (playerApi == null || !Utilities.IsValid(playerApi)) continue;
+                    if (playerApi == null || !Utilities.IsValid(playerApi) ||
+                        _IsUserSuppressed(playerApi) || IsVoiceCommsEnabled) continue;
 
                     _activePlayerId.Add(key);
                     _SetVCVoice(playerApi);
@@ -394,6 +492,20 @@ namespace DerpyNewbie.VoiceComms
             _lastVcUserDataJson = _vcUserDataJson;
         }
 
+        private void _RefreshVC()
+        {
+            var idTokens = _activePlayerId.ToArray();
+            foreach (var idToken in idTokens)
+            {
+                if (!int.TryParse(idToken.String, out var id)) continue;
+
+                var playerApi = VRCPlayerApi.GetPlayerById(id);
+                if (playerApi == null || !Utilities.IsValid(playerApi)) continue;
+
+                _SetVCVoice(playerApi);
+            }
+        }
+
         private void _UpdateJson(DataDictionary dict)
         {
             if (!VRCJson.TrySerializeToJson(dict, JsonExportType.Minify, out var result))
@@ -408,7 +520,17 @@ namespace DerpyNewbie.VoiceComms
         private void _SetVCVoice(VRCPlayerApi api)
         {
             api.SetPlayerTag("VoiceCommsEnabled", "true");
-            _SetVoice(api, vcGain, vcNear, vcFar, vcVolumetricRadius, vcLowpass);
+            _GetUserVcSettings(api.displayName,
+                out var muted, out var gain, out var near, out var far, out var volumetricRadius, out var lowpass);
+
+            if (muted)
+            {
+                _SetDefaultVoice(api);
+                _DiffApplyVCVoice();
+                return;
+            }
+
+            _SetVoice(api, gain, near, far, volumetricRadius, lowpass);
         }
 
         private void _SetDefaultVoice(VRCPlayerApi api)
@@ -551,6 +673,18 @@ namespace DerpyNewbie.VoiceComms
             }
         }
 
+        private void _Invoke_OnVoiceSettingsUpdated(string displayName)
+        {
+            Debug.Log($"[VCManager] Invoke_OnVoiceSettingsUpdated: {displayName}");
+
+            var arr = _callbacks.ToArray();
+            foreach (var callback in arr)
+            {
+                var obj = (VoiceCommsManagerCallback)callback.Reference;
+                if (obj) obj.OnVoiceSettingsUpdated(displayName);
+            }
+        }
+
         #endregion
     }
 
@@ -565,6 +699,10 @@ namespace DerpyNewbie.VoiceComms
         }
 
         public virtual void OnEndTransmission(string interactionType)
+        {
+        }
+
+        public virtual void OnVoiceSettingsUpdated(string displayName)
         {
         }
     }
