@@ -113,7 +113,7 @@ namespace DerpyNewbie.VoiceComms
         /// Is VoiceCommsManager enabled and working?
         /// </summary>
         [PublicAPI]
-        public bool IsVoiceCommsEnabled { get; set; }
+        public bool IsVoiceCommsEnabled { get; set; } = true;
 
         /// <summary>
         /// Begins VC transmission in <see cref="TxChannelId"/> from local player.
