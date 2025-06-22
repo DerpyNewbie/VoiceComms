@@ -361,11 +361,20 @@ namespace DerpyNewbie.VoiceComms
         [PublicAPI]
         public void _SetDefaultVcSettings(float gain, float near, float far, float volumetricRadius, bool lowpass)
         {
+            var prevGain = vcGain;
+            var prevNear = vcNear;
+            var prevFar = vcFar;
+            var prevVolumetricRadius = vcVolumetricRadius;
+            var prevLowpass = vcLowpass;
+
             vcGain = gain;
             vcNear = near;
             vcFar = far;
             vcVolumetricRadius = volumetricRadius;
             vcLowpass = lowpass;
+
+            _Invoke_OnVoiceDefaultSettingsUpdated(prevGain, prevNear, prevFar, prevVolumetricRadius, prevLowpass);
+            _RefreshVC();
         }
 
         [PublicAPI]
@@ -685,6 +694,21 @@ namespace DerpyNewbie.VoiceComms
             }
         }
 
+        private void _Invoke_OnVoiceDefaultSettingsUpdated(
+            float prevGain, float prevNear, float prevFar, float prevVolumetricRadius, bool prevLowpass)
+        {
+            Debug.Log(
+                $"[VCManager] Invoke_OnVoiceDefaultSettingsUpdated: {prevGain}, {prevNear}, {prevFar}, {prevVolumetricRadius}, {prevLowpass}");
+
+            var arr = _callbacks.ToArray();
+            foreach (var callback in arr)
+            {
+                var obj = (VoiceCommsManagerCallback)callback.Reference;
+                if (obj)
+                    obj.OnVoiceDefaultSettingsUpdated(prevGain, prevNear, prevFar, prevVolumetricRadius, prevLowpass);
+            }
+        }
+
         #endregion
     }
 
@@ -703,6 +727,11 @@ namespace DerpyNewbie.VoiceComms
         }
 
         public virtual void OnVoiceSettingsUpdated(string displayName)
+        {
+        }
+
+        public virtual void OnVoiceDefaultSettingsUpdated(
+            float prevGain, float prevNear, float prevFar, float prevVolumetricRadius, bool prevLowpass)
         {
         }
     }
