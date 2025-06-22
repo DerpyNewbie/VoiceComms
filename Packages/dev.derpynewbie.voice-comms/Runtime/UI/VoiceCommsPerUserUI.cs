@@ -18,7 +18,7 @@ namespace DerpyNewbie.VoiceComms.UI
         [SerializeField]
         private Transform userElementParent;
 
-        private readonly DataList _userElements = new DataList();
+        private readonly DataDictionary _userElements = new DataDictionary();
 
         private void Start()
         {
@@ -43,13 +43,8 @@ namespace DerpyNewbie.VoiceComms.UI
 
         private VoiceCommsPerUserUIElement GetUserElement(string displayName)
         {
-            foreach (var token in _userElements.ToArray())
-            {
-                var element = (VoiceCommsPerUserUIElement)token.Reference;
-                if (element != null && element.name == displayName)
-                    return element;
-            }
-
+            if (_userElements.TryGetValue(displayName, out var token))
+                return (VoiceCommsPerUserUIElement)token.Reference;
             return null;
         }
 
@@ -59,7 +54,7 @@ namespace DerpyNewbie.VoiceComms.UI
             userElementCopy.name = displayName;
             var element = userElementCopy.GetComponent<VoiceCommsPerUserUIElement>();
             element.Setup(displayName);
-            _userElements.Add(element);
+            _userElements.Add(displayName, element);
             userElementCopy.SetActive(true);
         }
 
@@ -70,7 +65,7 @@ namespace DerpyNewbie.VoiceComms.UI
 
         public override void OnVoiceSettingsUpdated(string displayName)
         {
-            foreach (var token in _userElements.ToArray())
+            foreach (var token in _userElements.GetValues().ToArray())
             {
                 var element = (VoiceCommsPerUserUIElement)token.Reference;
                 if (element != null) element.Refresh();
@@ -81,7 +76,7 @@ namespace DerpyNewbie.VoiceComms.UI
             float prevVolumetricRadius,
             bool prevLowpass)
         {
-            foreach (var token in _userElements.ToArray())
+            foreach (var token in _userElements.GetValues().ToArray())
             {
                 var element = (VoiceCommsPerUserUIElement)token.Reference;
                 if (element != null) element.OnValueChanged();
