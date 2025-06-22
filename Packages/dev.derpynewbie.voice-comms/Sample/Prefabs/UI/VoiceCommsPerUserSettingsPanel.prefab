@@ -1108,6 +1108,18 @@ RectTransform:
     type: 3}
   m_PrefabInstance: {fileID: 3353072951300991719}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &7305061040578457159 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5469701210686440608, guid: 4dd6dcc79b5f30e44929ec3a7eaa39f1,
+    type: 3}
+  m_PrefabInstance: {fileID: 3353072951300991719}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8802592371668539242}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &8802592371668539242 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6098319244101549453, guid: 4dd6dcc79b5f30e44929ec3a7eaa39f1,
@@ -1137,9 +1149,12 @@ MonoBehaviour:
     SerializationNodes: []
   _udonSharpBackingUdonBehaviour: {fileID: 9169601982408100153}
   voiceCommsManager: {fileID: 0}
+  backgroundImage: {fileID: 7305061040578457159}
   displayNameText: {fileID: 6131602192038806681}
   gainMultiplierSlider: {fileID: 4234578190383249589}
   suppressToggle: {fileID: 8932485671036763529}
+  defaultColor: {r: 0.5019608, g: 0.5019608, b: 0.5019608, a: 0.2}
+  activeColor: {r: 0.4117647, g: 0.58431375, b: 0.3529412, a: 0.2}
 --- !u!114 &9169601982408100153
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1338,7 +1353,7 @@ PrefabInstance:
     - target: {fileID: 135659387618585784, guid: 08d2a6fedb42a864b827d3fc1194e353,
         type: 3}
       propertyPath: m_Name
-      value: VoiceCommsPerUserSettingsPanel Variant
+      value: VoiceCommsPerUserSettingsPanel
       objectReference: {fileID: 0}
     - target: {fileID: 259299378046527173, guid: 08d2a6fedb42a864b827d3fc1194e353,
         type: 3}

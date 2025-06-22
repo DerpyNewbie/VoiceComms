@@ -41,6 +41,18 @@ namespace DerpyNewbie.VoiceComms.UI
             return false;
         }
 
+        private VoiceCommsPerUserUIElement GetUserElement(string displayName)
+        {
+            foreach (var token in _userElements.ToArray())
+            {
+                var element = (VoiceCommsPerUserUIElement)token.Reference;
+                if (element != null && element.name == displayName)
+                    return element;
+            }
+
+            return null;
+        }
+
         private void CreateUser(string displayName)
         {
             var userElementCopy = Instantiate(userElement, userElementParent);
@@ -74,6 +86,13 @@ namespace DerpyNewbie.VoiceComms.UI
                 var element = (VoiceCommsPerUserUIElement)token.Reference;
                 if (element != null) element.OnValueChanged();
             }
+        }
+
+        public override void OnVoiceUpdated(VRCPlayerApi player, bool activated)
+        {
+            if (player == null || !Utilities.IsValid(player)) return;
+            var element = GetUserElement(player.displayName);
+            if (element != null) element.SetVoiceHighlight(activated);
         }
     }
 }

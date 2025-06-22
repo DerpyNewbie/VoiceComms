@@ -13,6 +13,9 @@ namespace DerpyNewbie.VoiceComms.UI
         private VoiceCommsManager voiceCommsManager;
 
         [SerializeField]
+        private Image backgroundImage;
+
+        [SerializeField]
         private TMP_Text displayNameText;
 
         [SerializeField]
@@ -21,6 +24,13 @@ namespace DerpyNewbie.VoiceComms.UI
         [SerializeField]
         private Toggle suppressToggle;
 
+        [Header("Background Image Colors")]
+        [SerializeField]
+        private Color defaultColor;
+
+        [SerializeField]
+        private Color activeColor;
+
         private bool _ignoreEvents;
 
         private string _targetDisplayName;
@@ -28,7 +38,13 @@ namespace DerpyNewbie.VoiceComms.UI
         public void Setup(string displayName)
         {
             _targetDisplayName = displayName;
+            SetVoiceHighlight(false);
             Refresh();
+        }
+
+        public void SetVoiceHighlight(bool active)
+        {
+            backgroundImage.color = active ? activeColor : defaultColor;
         }
 
         public void OnValueChanged()
