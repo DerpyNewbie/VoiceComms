@@ -2,8 +2,10 @@
     "name": "DerpyNewbie.VoiceComms",
     "rootNamespace": "DerpyNewbie.VoiceComms",
     "references": [
+        "GUID:6055be8ebefd69e48b49212b09b47b2f",
         "GUID:3c1bc1267eab5884ebe7f232c09ee0d9",
-        "GUID:99835874ee819da44948776e0df4ff1d"
+        "GUID:99835874ee819da44948776e0df4ff1d",
+        "GUID:849b8c6574848ed44b9f0ccd066aff2b"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -1,17 +1,5 @@
 {
   "dependencies": {
-    "com.anatawa12.harmonyfix": {
-      "version": "file:com.anatawa12.harmonyfix",
-      "depth": 0,
-      "source": "embedded",
-      "dependencies": {}
-    },
-    "com.anatawa12.udon-sharp-migration-fix": {
-      "version": "file:com.anatawa12.udon-sharp-migration-fix",
-      "depth": 0,
-      "source": "embedded",
-      "dependencies": {}
-    },
     "com.unity.ai.navigation": {
       "version": "1.1.5",
       "depth": 0,
@@ -235,6 +223,12 @@
         "com.unity.inputsystem": "1.2.0",
         "com.unity.ai.navigation": "1.1.5"
       }
+    },
+    "dev.derpynewbie.common": {
+      "version": "file:dev.derpynewbie.common",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
     },
     "dev.derpynewbie.voice-comms": {
       "version": "file:dev.derpynewbie.voice-comms",
