@@ -1,5 +1,5 @@
 # VoiceComms
-VR FPS like VC communication gimmick for VRChat. using just 1 UdonSynced variable!
+VR FPS like VC communication gimmick for VRChat.
 
 ## How to Import
 ### Import using VCC
