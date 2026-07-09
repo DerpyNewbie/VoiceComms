@@ -1,11 +1,10 @@
-﻿using System;
-using JetBrains.Annotations;
+﻿using JetBrains.Annotations;
+using System;
 using UdonSharp;
 using UnityEngine;
 using VRC.SDK3.Data;
 using VRC.SDKBase;
 using VRC.Udon.Common;
-
 namespace DerpyNewbie.VoiceComms
 {
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
@@ -98,18 +97,21 @@ namespace DerpyNewbie.VoiceComms
 
         public override void InputUse(bool value, UdonInputEventArgs args)
         {
+            // おいおいおいおい didnt contains key + false の場合チェックしてへんやん
             var handTypeKey = HandTypeToToken(args.handType);
-            if (_interactionData.ContainsKey(handTypeKey))
+            if (value)
             {
-                if (value) return;
-                OnVcUseUp(args.handType);
-                return;
+                if (_interactionData.ContainsKey(handTypeKey)) return;
+                if (IsPickupInHand(args.handType)) return;
+                if (!CanInteract(InteractType, args.handType, out var interactionName)) return;
+
+                OnVcUseDown(args.handType, interactionName);
             }
-
-            if (IsPickupInHand(args.handType)) return;
-            if (!CanInteract(InteractType, args.handType, out var interactionName)) return;
-
-            OnVcUseDown(args.handType, interactionName);
+            else
+            {
+                if (!_interactionData.ContainsKey(handTypeKey)) return;
+                OnVcUseUp(args.handType);
+            }
         }
 
         private void OnVcUseDown(HandType handType, string interactionName)
@@ -173,7 +175,7 @@ namespace DerpyNewbie.VoiceComms
         }
 
         private bool CanInteract(ActivatorInteractType activatorInteractType, HandType handType,
-            out string interactionName)
+                                 out string interactionName)
         {
             // Handle BothShoulder case
             if (activatorInteractType == ActivatorInteractType.BothShoulder)
