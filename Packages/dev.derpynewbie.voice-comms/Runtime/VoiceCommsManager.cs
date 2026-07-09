@@ -1,16 +1,28 @@
-﻿using JetBrains.Annotations;
-using System;
+﻿using System;
+using JetBrains.Annotations;
 using UdonSharp;
 using UnityEngine;
 using VRC.SDK3.Data;
 using VRC.SDKBase;
+using VRC.Udon.Common;
 using VRC.Udon.Common.Interfaces;
+
 namespace DerpyNewbie.VoiceComms
 {
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class VoiceCommsManager : UdonSharpBehaviour
     {
+        #region UdonSynced
+
+        [UdonSynced]
+        private string _vcUserDataJson = "{}";
+
+        private string _lastVcUserDataJson = "{}";
+
+        #endregion
+
         #region SerializeField
+
         [SerializeField]
         private float vcGain;
 
@@ -40,14 +52,15 @@ namespace DerpyNewbie.VoiceComms
 
         [SerializeField]
         private bool defaultLowpass = true;
+
         #endregion
 
         #region PublicAPIs
+
         private readonly DataList _txChannelId = new DataList { new DataToken(0) };
         private readonly DataList _rxChannelId = new DataList { new DataToken(0) };
         private readonly DataList _activeInteractionType = new DataList();
-        private VoiceCommsUser _localUser;
-        private bool _isTransmitting;
+        private readonly DataDictionary _userSettings = new DataDictionary();
 
         /// <summary>
         /// TX channel ID for local player. transmits voice over these channels.
@@ -94,48 +107,13 @@ namespace DerpyNewbie.VoiceComms
         /// Is local transmitting voice over a channel?
         /// </summary>
         [PublicAPI]
-        public bool IsTransmitting
-        {
-            get => _isTransmitting;
-            private set
-            {
-                _isTransmitting = value;
-                var localUser = LocalUser;
-                if (localUser) localUser.SyncWithManager();
-            }
-        }
+        public bool IsTransmitting { get; private set; }
 
         /// <summary>
         /// Is VoiceCommsManager enabled and working?
         /// </summary>
         [PublicAPI]
         public bool IsVoiceCommsEnabled { get; set; } = true;
-
-        [PublicAPI]
-        public bool Lowpass => vcLowpass;
-
-        [PublicAPI]
-        public float Gain => vcGain;
-
-        [PublicAPI]
-        public float Near => vcNear;
-
-        [PublicAPI]
-        public float Far => vcFar;
-
-        [PublicAPI]
-        public float VolumetricRadius => vcVolumetricRadius;
-
-        [PublicAPI]
-        public VoiceCommsUser LocalUser
-        {
-            get
-            {
-                if (!_localUser)
-                    _localUser = Networking.LocalPlayer.GetVoiceCommsUser();
-                return _localUser;
-            }
-        }
 
         /// <summary>
         /// Begins VC transmission in <see cref="TxChannelId"/> from local player.
@@ -147,6 +125,10 @@ namespace DerpyNewbie.VoiceComms
 
             _activeInteractionType.Add(interactionType);
             IsTransmitting = true;
+            if (!Networking.IsOwner(gameObject))
+                Networking.SetOwner(Networking.LocalPlayer, gameObject);
+            RequestSerialization();
+
             _Invoke_OnBeginTransmission(interactionType);
         }
 
@@ -160,6 +142,10 @@ namespace DerpyNewbie.VoiceComms
 
             _activeInteractionType.Remove(interactionType);
             IsTransmitting = _activeInteractionType.Count != 0;
+            if (!Networking.IsOwner(gameObject))
+                Networking.SetOwner(Networking.LocalPlayer, gameObject);
+            RequestSerialization();
+
             _Invoke_OnEndTransmission(interactionType);
         }
 
@@ -233,17 +219,14 @@ namespace DerpyNewbie.VoiceComms
         [PublicAPI] [NotNull]
         public DataList _GetTxChannels(int playerId)
         {
-            var vrcPlayer = VRCPlayerApi.GetPlayerById(playerId);
-            if (vrcPlayer == null || !Utilities.IsValid(vrcPlayer)) return new DataList();
+            var data = _GetVCUserData(_vcUserDataJson);
+            // Cannot be _ in UdonSharp
+            // ReSharper disable once UnusedVariable
+            _GetVCUserRecord(data, playerId, out var isTransmitting, out var txChannels);
 
-            var vcUser = vrcPlayer.GetVoiceCommsUser();
-            if (vcUser == null) return new DataList();
-
-            var result = new DataList();
-            foreach (var channel in vcUser.TransmittingChannels)
-                result.Add(channel);
-
-            return result;
+            // Not available in UdonSharp
+            // ReSharper disable once MergeConditionalExpression
+            return txChannels != null ? txChannels : new DataList();
         }
 
         /// <summary>
@@ -261,11 +244,11 @@ namespace DerpyNewbie.VoiceComms
         [PublicAPI]
         public bool _IsTransmitting(int playerId)
         {
-            var vrcPlayer = VRCPlayerApi.GetPlayerById(playerId);
-            if (vrcPlayer == null || !Utilities.IsValid(vrcPlayer)) return false;
-
-            var vcUser = vrcPlayer.GetVoiceCommsUser();
-            return vcUser && vcUser.IsTransmitting;
+            var data = _GetVCUserData(_vcUserDataJson);
+            // Cannot be _ in UdonSharp
+            // ReSharper disable once UnusedVariable
+            _GetVCUserRecord(data, playerId, out var isTransmitting, out var txChannels);
+            return isTransmitting;
         }
 
         /// <summary>
@@ -292,15 +275,15 @@ namespace DerpyNewbie.VoiceComms
         [PublicAPI]
         public void ClearAllTransmissions()
         {
+            _vcUserDataJson = "{}";
             _activeInteractionType.Clear();
-            _isTransmitting = false;
+            IsTransmitting = false;
+            _DiffApplyVCVoice();
 
-            var players = VRCPlayerApi.GetPlayers(new VRCPlayerApi[VRCPlayerApi.GetPlayerCount()]);
-            foreach (var player in players)
-            {
-                if (!player.TryGetVoiceCommsUser(out var vcUser)) continue;
-                vcUser.ForceStopTransmitting();
-            }
+            if (!Networking.IsMaster) return;
+
+            Networking.SetOwner(Networking.LocalPlayer, gameObject);
+            RequestSerialization();
         }
 
         /// <summary>
@@ -317,64 +300,62 @@ namespace DerpyNewbie.VoiceComms
 
         [PublicAPI]
         public void _SetUserVcSettings(string displayName,
-                                       bool suppressed, float gain, float near, float far, float volumetricRadius, bool lowpass)
+            bool suppressed, float gain, float near, float far, float volumetricRadius, bool lowpass)
         {
-            if (!TryGetPlayerByDisplayName(displayName, out var playerApi))
-                return;
+            // Not supported in UdonSharp
+            // ReSharper disable once UseObjectOrCollectionInitializer
+            var vcSettings = new DataDictionary();
+            vcSettings.Add("suppressed", new DataToken(suppressed));
+            vcSettings.Add("gain", new DataToken(gain));
+            vcSettings.Add("near", new DataToken(near));
+            vcSettings.Add("far", new DataToken(far));
+            vcSettings.Add("volumetricRadius", new DataToken(volumetricRadius));
+            vcSettings.Add("lowpass", new DataToken(lowpass));
 
-            if (!playerApi.TryGetVoiceCommsUser(out var vcUser))
-                return;
-
-            vcUser.IsSuppressed = suppressed;
-            vcUser.Gain = gain;
-            vcUser.Near = near;
-            vcUser.Far = far;
-            vcUser.VolumetricRadius = volumetricRadius;
-            vcUser.Lowpass = lowpass;
+            if (_userSettings.ContainsKey(displayName)) _userSettings[displayName] = vcSettings;
+            else _userSettings.Add(displayName, vcSettings);
 
             _RefreshVC();
+
             _Invoke_OnVoiceSettingsUpdated(displayName);
         }
 
         [PublicAPI]
         public void _GetUserVcSettings(string displayName,
-                                       out bool suppressed, out float gain, out float near, out float far, out float volumetricRadius,
-                                       out bool lowpass)
+            out bool suppressed, out float gain, out float near, out float far, out float volumetricRadius,
+            out bool lowpass)
         {
-            if (!TryGetPlayerByDisplayName(displayName, out var playerApi) || !playerApi.TryGetVoiceCommsUser(out var vcUser))
+            if (!_userSettings.ContainsKey(displayName))
             {
                 suppressed = false;
                 _GetDefaultVcSettings(out gain, out near, out far, out volumetricRadius, out lowpass);
                 return;
             }
 
-            suppressed = vcUser.IsSuppressed;
-            gain = vcUser.Gain;
-            near = vcUser.Near;
-            far = vcUser.Far;
-            volumetricRadius = vcUser.VolumetricRadius;
-            lowpass = vcUser.Lowpass;
+            var userSetting = _userSettings[displayName].DataDictionary;
+            userSetting.TryGetValue("suppressed", out var suppressedToken);
+            userSetting.TryGetValue("gain", out var gainToken);
+            userSetting.TryGetValue("near", out var nearToken);
+            userSetting.TryGetValue("far", out var farToken);
+            userSetting.TryGetValue("volumetricRadius", out var volumetricRadiusToken);
+            userSetting.TryGetValue("lowpass", out var lowpassToken);
+
+            suppressed = suppressedToken.Boolean;
+            gain = (float)gainToken.Number;
+            near = (float)nearToken.Number;
+            far = (float)farToken.Number;
+            volumetricRadius = (float)volumetricRadiusToken.Number;
+            lowpass = lowpassToken.Boolean;
         }
 
-        [PublicAPI]
         public void _ClearUserVcSettings(string displayName)
         {
-            if (!TryGetPlayerByDisplayName(displayName, out var playerApi) || !playerApi.TryGetVoiceCommsUser(out var vcUser)) return;
-            vcUser.HasCustomSettings = false;
-
-            _RefreshVC();
-            _Invoke_OnVoiceSettingsUpdated(displayName);
+            _userSettings.Remove(displayName);
         }
 
-        [PublicAPI]
         public void _ClearUserVcSettings()
         {
-            var players = VRCPlayerApi.GetPlayers(new VRCPlayerApi[VRCPlayerApi.GetPlayerCount()]);
-            foreach (var player in players)
-            {
-                if (!player.TryGetVoiceCommsUser(out var vcUser)) continue;
-                vcUser.HasCustomSettings = false;
-            }
+            _userSettings.Clear();
         }
 
         [PublicAPI]
@@ -398,7 +379,7 @@ namespace DerpyNewbie.VoiceComms
 
         [PublicAPI]
         public void _GetDefaultVcSettings(out float gain, out float near, out float far,
-                                          out float volumetricRadius, out bool lowpass)
+            out float volumetricRadius, out bool lowpass)
         {
             gain = vcGain;
             near = vcNear;
@@ -407,110 +388,164 @@ namespace DerpyNewbie.VoiceComms
             lowpass = vcLowpass;
         }
 
-        [PublicAPI]
         public bool _IsUserSuppressed(VRCPlayerApi playerApi)
         {
-            return playerApi.TryGetVoiceCommsUser(out var vcUser) && vcUser.IsSuppressed;
+            if (!Utilities.IsValid(playerApi)) return true;
+
+            _GetUserVcSettings(playerApi.displayName, out var suppressed,
+                out var a, out var b, out var c, out var d, out var e);
+            return suppressed;
         }
+
+        #endregion
+
+        #region UdonEvents
+
+        public override void OnPlayerLeft(VRCPlayerApi playerApi)
+        {
+            var dict = _GetVCUserData(_vcUserDataJson);
+            _UpdateVCUserRecord(dict, playerApi.playerId, false, new DataList());
+            _UpdateJson(dict);
+            _DiffApplyVCVoice();
+        }
+
+        public override void OnPreSerialization()
+        {
+            var dict = _GetVCUserData(_vcUserDataJson);
+            _UpdateVCUserRecord(dict, Networking.LocalPlayer.playerId, IsTransmitting, _txChannelId);
+            _UpdateJson(dict);
+        }
+
+        public override void OnPostSerialization(SerializationResult result)
+        {
+            if (result.success)
+                _DiffApplyVCVoice();
+            else
+                RequestSerialization();
+        }
+
+        public override void OnDeserialization()
+        {
+            var dict = _GetVCUserData(_vcUserDataJson);
+            // Cannot be _ in UdonSharp
+            // ReSharper disable once UnusedVariable
+            _GetVCUserRecord(dict, Networking.LocalPlayer.playerId, out var isTransmitting, out var txChannels);
+            if (IsTransmitting != isTransmitting)
+            {
+                Debug.LogWarning("[VCManager] Detected VC data de-sync! re-syncing!");
+                Networking.SetOwner(Networking.LocalPlayer, gameObject);
+                RequestSerialization();
+            }
+
+            _DiffApplyVCVoice();
+        }
+
         #endregion
 
         #region Internals
+
         private readonly DataList _activePlayerId = new DataList();
 
-        public void _UpdateVoice(VoiceCommsUser user)
+        private void _DiffApplyVCVoice()
         {
-            if (!user)
+            if (!VRCJson.TryDeserializeFromJson(_vcUserDataJson, out var updatedToken))
+                Debug.LogError(
+                    $"[VCManager] Could not deserialize from VCUserDataJson: {_vcUserDataJson}, reason: {updatedToken.ToString()}");
+
+            var updated = updatedToken.TokenType == TokenType.DataDictionary
+                ? updatedToken.DataDictionary
+                : new DataDictionary();
+
+            if (!VRCJson.TryDeserializeFromJson(_lastVcUserDataJson, out var outdatedToken))
+                Debug.LogError(
+                    $"[VCManager] Could not deserialize from lastVCUserDataJson: {_lastVcUserDataJson}, reason: {outdatedToken.ToString()}");
+
+            var outdated = outdatedToken.TokenType == TokenType.DataDictionary
+                ? outdatedToken.DataDictionary
+                : new DataDictionary();
+
+            var updatedKeys = updated.GetKeys().ToArray();
+            foreach (var key in updatedKeys)
             {
-                return;
+                if (_ContainsSameChannelId(_rxChannelId, updated[key].DataList) &&
+                    !_activePlayerId.Contains(key) && int.TryParse(key.String, out var id))
+                {
+                    var playerApi = VRCPlayerApi.GetPlayerById(id);
+                    if (playerApi == null || !Utilities.IsValid(playerApi) ||
+                        _IsUserSuppressed(playerApi) || !IsVoiceCommsEnabled) continue;
+
+                    _activePlayerId.Add(key);
+                    _SetVCVoice(playerApi);
+                    _Invoke_OnVoiceUpdated(playerApi, true);
+                }
+
+                outdated.Remove(key);
             }
 
-            if (!user.IsTransmitting)
+            var outdatedKeys = outdated.GetKeys().ToArray();
+            foreach (var key in outdatedKeys)
             {
-                _SetDefaultVoice(user.VrcPlayer);
-                return;
+                if (!_activePlayerId.Contains(key)) continue;
+
+                _activePlayerId.Remove(key);
+
+                if (!int.TryParse(key.String, out var id)) continue;
+
+                var playerApi = VRCPlayerApi.GetPlayerById(id);
+                if (playerApi == null || !Utilities.IsValid(playerApi)) continue;
+
+                _SetDefaultVoice(playerApi);
+                _Invoke_OnVoiceUpdated(playerApi, false);
             }
 
-            if (_ContainsSameChannelId(user.TransmittingChannels, RxChannelId))
-            {
-                _SetVCVoice(user.VrcPlayer);
-                return;
-            }
+            _lastVcUserDataJson = _vcUserDataJson;
         }
 
         private void _RefreshVC()
         {
-            var players = VRCPlayerApi.GetPlayers(new VRCPlayerApi[VRCPlayerApi.GetPlayerCount()]);
-            foreach (var player in players)
-                _UpdateVoice(player.GetVoiceCommsUser());
+            var idTokens = _activePlayerId.ToArray();
+            foreach (var idToken in idTokens)
+            {
+                if (!int.TryParse(idToken.String, out var id)) continue;
+
+                var playerApi = VRCPlayerApi.GetPlayerById(id);
+                if (playerApi == null || !Utilities.IsValid(playerApi)) continue;
+
+                _SetVCVoice(playerApi);
+            }
+        }
+
+        private void _UpdateJson(DataDictionary dict)
+        {
+            if (!VRCJson.TrySerializeToJson(dict, JsonExportType.Minify, out var result))
+            {
+                Debug.LogError($"[VCManager] Unable to serialize to json {_vcUserDataJson}: {result.ToString()}");
+                return;
+            }
+
+            _vcUserDataJson = result.String;
         }
 
         private void _SetVCVoice(VRCPlayerApi api)
         {
-            if (api == null || !api.IsValid())
-            {
-                return;
-            }
-
-            if (api.GetPlayerTag("NCVoiceOverride") == "true")
-            {
-                Debug.Log($"[VCManager] _SetVCVoice: {api.displayName} has NCVoiceOverride tag enabled, ignoring.");
-                return;
-            }
-
-            _GetUserVcSettings(
-                api.displayName,
-                out var muted,
-                out var gain,
-                out var near,
-                out var far,
-                out var volumetricRadius,
-                out var lowpass
-            );
+            api.SetPlayerTag("VoiceCommsEnabled", "true");
+            _GetUserVcSettings(api.displayName,
+                out var muted, out var gain, out var near, out var far, out var volumetricRadius, out var lowpass);
 
             if (muted)
             {
                 _SetDefaultVoice(api);
+                _DiffApplyVCVoice();
                 return;
             }
 
-            api.SetPlayerTag("VoiceCommsEnabled", "true");
-
-            if (!_activePlayerId.Contains($"{api.playerId}"))
-            {
-                _activePlayerId.Add($"{api.playerId}");
-            }
-
             _SetVoice(api, gain, near, far, volumetricRadius, lowpass);
-            _Invoke_OnVoiceUpdated(api, true);
         }
 
         private void _SetDefaultVoice(VRCPlayerApi api)
         {
-            if (api == null || !api.IsValid())
-            {
-                return;
-            }
-
-            if (api.GetPlayerTag("NCVoiceOverride") == "true")
-            {
-                Debug.Log($"[VCManager] _SetDefaultVoice: {api.displayName} has NCVoiceOverride tag enabled, ignoring.");
-                return;
-            }
-
-            if (api.GetPlayerTag("VoiceCommsEnabled") != "true")
-            {
-                return;
-            }
-
             api.SetPlayerTag("VoiceCommsEnabled", "false");
-
-            if (_activePlayerId.Contains($"{api.playerId}"))
-            {
-                _activePlayerId.RemoveAll($"{api.playerId}");
-            }
-
             _SetVoice(api, defaultGain, defaultNear, defaultFar, defaultVolumetricRadius, defaultLowpass);
-            _Invoke_OnVoiceUpdated(api, false);
         }
 
         private static void _SetVoice(
@@ -532,10 +567,52 @@ namespace DerpyNewbie.VoiceComms
             api.SetVoiceLowpass(lowpass);
         }
 
-        private static bool _ContainsSameChannelId(int[] ch1, DataList ch2)
+        private static DataDictionary _GetVCUserData(string source)
         {
+            if (!VRCJson.TryDeserializeFromJson(source, out var result))
+                Debug.LogError(
+                    $"[VCManager] Could not get VC user data from source \"{source}\". {result.ToString()}");
+
+            return result.TokenType == TokenType.DataDictionary
+                ? result.DataDictionary
+                : new DataDictionary();
+        }
+
+        private static void _UpdateVCUserRecord(DataDictionary dict, int playerId, bool isTransmitting,
+            DataList txChannelId)
+        {
+            var key = new DataToken($"{playerId}");
+            if (isTransmitting)
+            {
+                if (!dict.ContainsKey(key)) dict.Add(key, new DataToken(txChannelId));
+                else dict.SetValue(key, new DataToken(txChannelId));
+
+                return;
+            }
+
+            dict.Remove(key);
+        }
+
+        private static void _GetVCUserRecord(DataDictionary dict, int playerId, out bool isTransmitting,
+            [CanBeNull] out DataList txChannelId)
+        {
+            var key = $"{playerId}";
+            if (!dict.ContainsKey(key) || !dict.TryGetValue(key, TokenType.DataList, out var value))
+            {
+                isTransmitting = false;
+                txChannelId = null;
+                return;
+            }
+
+            isTransmitting = true;
+            txChannelId = value.DataList;
+        }
+
+        private static bool _ContainsSameChannelId(DataList ch1, DataList ch2)
+        {
+            var ch1Arr = ch1.ToArray();
             var ch2Arr = ch2.ToArray();
-            foreach (var ch1Token in ch1)
+            foreach (var ch1Token in ch1Arr)
             foreach (var ch2Token in ch2Arr)
                 if (_IsSameChannelId(ch1Token, ch2Token))
                     return true;
@@ -549,9 +626,11 @@ namespace DerpyNewbie.VoiceComms
             if (isNumbers && Math.Abs(t1.Number - t2.Number) < double.Epsilon) return true;
             return t1.TokenType != t2.TokenType ? t1.ToString().Equals(t2.ToString()) : t1.Equals(t2);
         }
+
         #endregion
 
         #region EventCallbacks
+
         private readonly DataList _callbacks = new DataList();
 
         [PublicAPI]
@@ -629,23 +708,8 @@ namespace DerpyNewbie.VoiceComms
                     obj.OnVoiceDefaultSettingsUpdated(prevGain, prevNear, prevFar, prevVolumetricRadius, prevLowpass);
             }
         }
+
         #endregion
-
-        private static bool TryGetPlayerByDisplayName(string displayName, [CanBeNull] out VRCPlayerApi playerApi)
-        {
-            var players = VRCPlayerApi.GetPlayers(new VRCPlayerApi[VRCPlayerApi.GetPlayerCount()]);
-            foreach (var player in players)
-            {
-                if (player.displayName != displayName)
-                    continue;
-
-                playerApi = player;
-                return true;
-            }
-
-            playerApi = null;
-            return false;
-        }
     }
 
     public abstract class VoiceCommsManagerCallback : UdonSharpBehaviour

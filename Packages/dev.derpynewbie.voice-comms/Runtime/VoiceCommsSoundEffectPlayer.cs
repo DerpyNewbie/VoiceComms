@@ -1,6 +1,8 @@
 ﻿using UdonSharp;
 using UnityEngine;
+using UnityEngine.Serialization;
 using VRC.SDKBase;
+
 namespace DerpyNewbie.VoiceComms
 {
     [UdonBehaviourSyncMode(BehaviourSyncMode.None)]
