@@ -2,6 +2,7 @@
 using JetBrains.Annotations;
 using UdonSharp;
 using UnityEngine;
+using VRC.SDK3.Data;
 namespace DerpyNewbie.VoiceComms
 {
     /// <summary>
@@ -20,8 +21,16 @@ namespace DerpyNewbie.VoiceComms
         [Tooltip("Maximum duration for continuous transmission. Set this 0 or below for unlimited duration.")]
         protected float maxDuration;
 
+        [SerializeField]
+        [Tooltip("Replaces TX channels while transmitting from this activator, and restores them afterwards.")]
+        protected bool doTxChannelOverrideOnTransmit;
+
+        [SerializeField]
+        protected int[] txChannelOverrideOnTransmit;
+
         private bool _isTransmitting;
         private float _endTime;
+        private DataList _savedTxChannels;
 
         [PublicAPI]
         public bool IsTransmitting => _isTransmitting;
@@ -53,6 +62,7 @@ namespace DerpyNewbie.VoiceComms
             _isTransmitting = true;
             if (HasDurationLimit()) _endTime = Time.timeSinceLevelLoad + maxDuration;
 
+            ApplyTxChannelOverride();
             voiceComms._BeginVCTransmission(interactionName);
         }
 
@@ -71,6 +81,7 @@ namespace DerpyNewbie.VoiceComms
 
             _isTransmitting = false;
             voiceComms._EndVCTransmission(interactionName);
+            RestoreTxChannel();
         }
 
         /// <summary>
@@ -81,6 +92,28 @@ namespace DerpyNewbie.VoiceComms
         {
             if (_isTransmitting) _EndTransmission();
             else _BeginTransmission();
+        }
+
+        private void ApplyTxChannelOverride()
+        {
+            if (!doTxChannelOverrideOnTransmit || txChannelOverrideOnTransmit == null) return;
+
+            _savedTxChannels = voiceComms.TxChannelId;
+            voiceComms._ClearTxChannel();
+            foreach (var channel in txChannelOverrideOnTransmit)
+                voiceComms._AddTxChannel(channel);
+        }
+
+        private void RestoreTxChannel()
+        {
+            if (_savedTxChannels == null) return;
+
+            voiceComms._ClearTxChannel();
+            var channels = _savedTxChannels.ToArray();
+            foreach (var channel in channels)
+                voiceComms._AddTxChannel(channel.Int);
+
+            _savedTxChannels = null;
         }
 
         private bool HasDurationLimit()
