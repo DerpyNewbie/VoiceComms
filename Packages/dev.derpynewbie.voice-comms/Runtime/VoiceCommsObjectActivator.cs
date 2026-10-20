@@ -1,7 +1,7 @@
-﻿using JetBrains.Annotations;
+﻿using DerpyNewbie.Common;
+using JetBrains.Annotations;
 using UdonSharp;
 using UnityEngine;
-
 namespace DerpyNewbie.VoiceComms
 {
     /// <summary>
@@ -9,7 +9,7 @@ namespace DerpyNewbie.VoiceComms
     /// </summary>
     public abstract class VoiceCommsObjectActivator : UdonSharpBehaviour
     {
-        [SerializeField]
+        [SerializeField] [NewbieInject]
         protected VoiceCommsManager voiceComms;
 
         [SerializeField]
